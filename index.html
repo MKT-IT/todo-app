@@ -760,8 +760,21 @@ function renderQuickAddRow(bucket) {
   cancelBtn.addEventListener('click', () => { quickAddBucket = null; renderBoard(); });
 
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // タイトル入力中のEnterでは追加せず、プロジェクトを選ばせてから確定させる
+      if (projects.length && newProjectInput.hidden && input.value.trim()) {
+        select.focus();
+      } else {
+        submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject);
+      }
+    }
     if (e.key === 'Escape') { quickAddBucket = null; renderBoard(); }
+  });
+
+  select.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject); }
+    if (e.key === 'Escape') { e.preventDefault(); quickAddBucket = null; renderBoard(); }
   });
 
   row.append(input, select, newProjectInput, confirmBtn, cancelBtn);
