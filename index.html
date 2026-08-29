@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ToDo</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --card: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6e6e73;
+    --line: #e5e5ea;
+    --accent: #ffcc00;
+    --link: #007aff;
+    --danger: #ff3b30;
+  }
+  * { box-sizing: border-box; }
+  body.no-select { user-select: none; -webkit-user-select: none; }
+  body {
+    margin: 0;
+    padding: 24px 16px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    justify-content: center;
+  }
+  main { width: 100%; max-width: 600px; }
+  .header-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  h1 { font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  input, select, button { font: inherit; }
+  #manageProjectsBtn {
+    padding: 4px 0; border: 0;
+    background: none; color: var(--link); cursor: pointer; font-size: 15px;
+  }
+  #manageProjectsPanel {
+    margin: 0 0 20px; padding: 0;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  #manageProjectsPanel[hidden] { display: none; }
+  #manageProjectsPanel .row {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 0;
+  }
+  #manageProjectsPanel .row + .row { border-top: 1px solid var(--line); }
+  #manageProjectsPanel input {
+    flex: 1; min-width: 0;
+    padding: 4px 0;
+    border: 0; border-bottom: 1px solid transparent;
+    background: none; color: var(--text); font-size: 15px;
+  }
+  #manageProjectsPanel input:focus { border-bottom-color: var(--link); outline: none; }
+  #manageProjectsPanel .del-project {
+    border: 0; background: none; color: var(--muted);
+    cursor: pointer; padding: 4px 8px; border-radius: 6px; font-size: 13px; flex-shrink: 0;
+  }
+  #manageProjectsPanel .toggle-visibility {
+    border: 0; background: none; color: var(--link);
+    cursor: pointer; padding: 4px 8px; border-radius: 6px; font-size: 13px; flex-shrink: 0;
+  }
+  #manageProjectsPanel .toggle-visibility.is-hidden { color: var(--muted); }
+  #manageProjectsPanel .project-color-wrap {
+    display: block; width: 22px; height: 22px; border-radius: 50%;
+    overflow: hidden; position: relative; flex-shrink: 0; cursor: pointer;
+  }
+  #manageProjectsPanel .project-color {
+    position: absolute; top: 50%; left: 50%;
+    width: 150%; height: 150%; transform: translate(-50%, -50%);
+    padding: 0; border: 0; cursor: pointer; background: none;
+  }
+  #manageProjectsPanel .project-color::-webkit-color-swatch-wrapper { padding: 0; }
+  #manageProjectsPanel .project-color::-webkit-color-swatch { border: 0; }
+  #manageProjectsPanel .project-color::-moz-color-swatch { border: 0; }
+  #manageProjectsPanel .del-project:hover { color: var(--danger); }
+  #manageProjectsPanel .del-project.confirm { color: #fff; background: var(--danger); }
+  #manageProjectsPanel .empty { color: var(--muted); font-size: 14px; padding: 10px 0; margin: 0; }
+
+  #filters {
+    display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .chip {
+    padding: 0 4px; border: 0; min-height: 44px; display: flex; align-items: center;
+    background: none; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  .chip.on { color: var(--text); font-weight: 600; }
+
+  #board { display: flex; flex-direction: column; gap: 28px; }
+  .bucket h2 {
+    font-size: 17px; margin: 0 0 8px; color: var(--text); font-weight: 700;
+  }
+  .bucket-list {
+    list-style: none; margin: 0; padding: 0;
+    min-height: 40px; border-radius: 8px; transition: background-color .12s;
+  }
+  .bucket-list.drag-over {
+    background: rgba(0, 0, 0, 0.04);
+  }
+  .bucket-empty {
+    color: var(--muted); font-size: 14px; padding: 10px 0;
+  }
+  .quick-add-btn {
+    display: block; width: 100%;
+    padding: 10px 0; margin-top: 2px;
+    border: 0;
+    background: none; color: var(--link); cursor: pointer; font-size: 15px; text-align: left;
+  }
+  .quick-add-row {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 8px 0;
+  }
+  .quick-add-row input {
+    flex: 1 1 100%; min-width: 0;
+    padding: 8px 0;
+    border: 0; border-bottom: 1px solid var(--line);
+    background: none; color: var(--text);
+  }
+  .quick-add-row input:focus { border-bottom-color: var(--link); outline: none; }
+  .quick-add-row input.new-project-input[hidden] {
+    display: none;
+  }
+  .quick-add-row select {
+    padding: 8px 4px;
+    border: 0; border-bottom: 1px solid var(--line);
+    background: none; color: var(--text);
+  }
+  .quick-add-row button {
+    padding: 6px 14px; border: 0; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .quick-add-confirm { background: var(--link); color: #fff; }
+  .quick-add-cancel { background: none; color: var(--muted); }
+
+  .task {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bucket-list .task:last-child { border-bottom: 0; }
+  .task.dragging {
+    opacity: .85;
+    background: var(--bg);
+  }
+  .drag-handle {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 24px; min-height: 44px; flex-shrink: 0;
+    color: var(--muted); font-size: 16px; line-height: 1;
+    cursor: grab; touch-action: none; user-select: none;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .check-hit {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; flex-shrink: 0; cursor: pointer;
+  }
+  .task input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--link); cursor: pointer; flex-shrink: 0; }
+  .label { flex: 1; min-width: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+  .label .proj {
+    display: inline-block; flex-shrink: 0; max-width: 40%;
+    padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .label .title-text {
+    flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border-bottom: 1px dashed transparent; cursor: text;
+  }
+  .label .title-text:hover { border-bottom-color: var(--line); }
+  .label .title-edit {
+    flex: 1 1 auto; min-width: 80px; font: inherit;
+    padding: 2px 0; margin: -2px 0;
+    border: 0; border-bottom: 1px solid var(--link);
+    background: none; color: var(--text);
+    touch-action: auto;
+  }
+  .task.done .label { color: var(--muted); text-decoration: line-through; }
+  .task.done .label .proj { opacity: .5; }
+  .del {
+    border: 0; background: none; color: var(--muted);
+    cursor: pointer; border-radius: 6px; flex-shrink: 0; font-size: 14px;
+    min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;
+  }
+  .del:hover { color: var(--danger); }
+  .del.confirm { background: var(--danger); color: #fff; font-size: 12px; }
+  .bucket-tag {
+    font-size: 12px; padding: 4px 8px; border-radius: 999px;
+    background: var(--line); color: var(--muted); flex-shrink: 0;
+  }
+
+  @media (min-width: 900px) {
+    main { max-width: 900px; }
+    #board { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="header-row">
+    <h1>ToDo</h1>
+    <button type="button" id="manageProjectsBtn">プロジェクト管理</button>
+  </div>
+
+  <div id="manageProjectsPanel" hidden></div>
+
+  <div id="filters"></div>
+
+  <div id="board"></div>
+</main>
+
+<script>
+const KEY = 'todos.v1';
+const PROJECTS_KEY = 'projects.v1';
+const PROJECT_COLORS_KEY = 'projectColors.v1';
+const HIDDEN_PROJECTS_KEY = 'hiddenProjects.v1';
+const BUCKETS = ['本日中', '明日', '明日以降', 'お手隙', 'Pending'];
+const BUCKET_LABELS = { '本日中': '今日', '明日': '明日', '明日以降': '明日以降', 'お手隙': '時間が空いた時', 'Pending': '確認中' };
+const COMPLETED = '完了済み';
+const PROJECT_COLOR_PALETTE = [
+  '#FFD6D6', '#FFE3C2', '#FFF3B0', '#D7F2D3', '#C7EDE6',
+  '#CDE7F7', '#D6DCFB', '#E4D6F7', '#F7D6EC', '#E8DAC8', '#D9E8C9', '#E2E2E2'
+];
+
+let todos = load(KEY, []);
+let projects = load(PROJECTS_KEY, []);
+let projectColors = loadObject(PROJECT_COLORS_KEY, {});
+let hiddenProjects = load(HIDDEN_PROJECTS_KEY, []);
+let filter = 'すべて';
+let quickAddBucket = null;
+let dragState = null;
+let pendingFocusId = null;
+
+function uuid() {
+  // crypto.randomUUID() は https / localhost 以外(secure contextでない環境)では使えないため使用しない
+  return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+todos.forEach(t => { if (!BUCKETS.includes(t.bucket)) t.bucket = 'Pending'; });
+
+const $board = document.getElementById('board');
+const $filters = document.getElementById('filters');
+const $manageProjectsBtn = document.getElementById('manageProjectsBtn');
+const $manageProjectsPanel = document.getElementById('manageProjectsPanel');
+
+function load(key, fallback) {
+  try {
+    const data = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(data) ? data : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadObject(key, fallback) {
+  try {
+    const data = JSON.parse(localStorage.getItem(key));
+    return (data && typeof data === 'object' && !Array.isArray(data)) ? data : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(todos));
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    localStorage.setItem(PROJECT_COLORS_KEY, JSON.stringify(projectColors));
+    localStorage.setItem(HIDDEN_PROJECTS_KEY, JSON.stringify(hiddenProjects));
+  } catch {
+    // localStorageが使えない環境でも画面上の操作は継続できるようにする
+  }
+}
+
+function assignProjectColor(name) {
+  const used = new Set(Object.values(projectColors));
+  let color = PROJECT_COLOR_PALETTE.find(c => !used.has(c));
+  if (!color) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    color = PROJECT_COLOR_PALETTE[hash % PROJECT_COLOR_PALETTE.length];
+  }
+  projectColors[name] = color;
+  save();
+  return color;
+}
+
+function getProjectColor(name) {
+  return projectColors[name] || assignProjectColor(name);
+}
+
+function setProjectColor(name, color) {
+  projectColors[name] = color;
+  save();
+}
+
+const NEW_PROJECT = '__new_project__';
+
+function populateProjectOptions(selectEl, preferredValue) {
+  const current = preferredValue ?? selectEl.value;
+  selectEl.replaceChildren(...projects.map(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    return opt;
+  }), Object.assign(document.createElement('option'), {
+    value: NEW_PROJECT,
+    textContent: '+ 新しいプロジェクト'
+  }));
+  if (projects.includes(current)) selectEl.value = current;
+}
+
+$manageProjectsBtn.addEventListener('click', () => {
+  $manageProjectsPanel.hidden = !$manageProjectsPanel.hidden;
+  if (!$manageProjectsPanel.hidden) renderManagePanel();
+});
+
+function flashInvalid(el) {
+  el.style.outline = '2px solid var(--accent)';
+  setTimeout(() => { el.style.outline = ''; }, 1200);
+}
+
+function renameProject(oldName, newName, input) {
+  newName = newName.trim();
+  if (!newName || newName === oldName) return;
+  if (projects.includes(newName)) {
+    if (input) flashInvalid(input);
+    return;
+  }
+  projects = projects.map(p => p === oldName ? newName : p);
+  todos.forEach(t => { if (t.project === oldName) t.project = newName; });
+  if (projectColors[oldName]) {
+    projectColors[newName] = projectColors[oldName];
+    delete projectColors[oldName];
+  }
+  hiddenProjects = hiddenProjects.map(p => p === oldName ? newName : p);
+  if (filter === oldName) filter = newName;
+  save();
+  render();
+  renderManagePanel();
+}
+
+function deleteProject(name) {
+  projects = projects.filter(p => p !== name);
+  todos = todos.filter(t => t.project !== name);
+  delete projectColors[name];
+  hiddenProjects = hiddenProjects.filter(p => p !== name);
+  if (filter === name) filter = 'すべて';
+  save();
+  render();
+  renderManagePanel();
+}
+
+function renderManagePanel() {
+  if (!projects.length) {
+    $manageProjectsPanel.replaceChildren(Object.assign(document.createElement('p'), {
+      className: 'empty', textContent: 'プロジェクトがありません'
+    }));
+    return;
+  }
+
+  $manageProjectsPanel.replaceChildren(...projects.map(name => {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const colorWrap = document.createElement('span');
+    colorWrap.className = 'project-color-wrap';
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'project-color';
+    colorInput.value = getProjectColor(name);
+    colorInput.addEventListener('input', () => {
+      setProjectColor(name, colorInput.value);
+      render();
+    });
+    colorWrap.appendChild(colorInput);
+
+    const input = document.createElement('input');
+    input.value = name;
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); renameProject(name, input.value, input); }
+    });
+    input.addEventListener('blur', () => renameProject(name, input.value, input));
+
+    const visBtn = document.createElement('button');
+    visBtn.type = 'button';
+    visBtn.className = 'toggle-visibility';
+    const isHidden = hiddenProjects.includes(name);
+    visBtn.textContent = isHidden ? '非表示' : '表示';
+    visBtn.classList.toggle('is-hidden', isHidden);
+    visBtn.addEventListener('click', () => {
+      if (hiddenProjects.includes(name)) {
+        hiddenProjects = hiddenProjects.filter(p => p !== name);
+      } else {
+        hiddenProjects.push(name);
+      }
+      save();
+      render();
+      renderManagePanel();
+    });
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'del-project';
+    del.textContent = '削除';
+    del.addEventListener('click', () => {
+      if (del.dataset.confirm) {
+        deleteProject(name);
+      } else {
+        del.dataset.confirm = '1';
+        del.classList.add('confirm');
+        del.textContent = '本当に削除？';
+        setTimeout(() => {
+          delete del.dataset.confirm;
+          del.classList.remove('confirm');
+          del.textContent = '削除';
+        }, 3000);
+      }
+    });
+
+    row.append(colorWrap, input, visBtn, del);
+    return row;
+  }));
+}
+
+function renderFilters() {
+  const visibleProjects = projects.filter(p => !hiddenProjects.includes(p));
+  $filters.replaceChildren(...['すべて', COMPLETED, ...visibleProjects].map(name => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (filter === name ? ' on' : '');
+    btn.textContent = name;
+    btn.onclick = () => { filter = name; render(); };
+    return btn;
+  }));
+}
+
+function moveTask(id, bucket) {
+  const todo = todos.find(t => t.id === id);
+  if (!todo || todo.bucket === bucket) return;
+  todo.bucket = bucket;
+  save();
+  render();
+}
+
+const DRAG_THRESHOLD = 6;
+
+function clearDragOverHighlight() {
+  document.querySelectorAll('.bucket-list.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+function onPointerMove(e) {
+  if (!dragState || dragState.pointerId !== e.pointerId) return;
+  const dx = e.clientX - dragState.startX;
+  const dy = e.clientY - dragState.startY;
+
+  if (!dragState.moved) {
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    dragState.moved = true;
+    const rect = dragState.li.getBoundingClientRect();
+    dragState.origX = rect.left;
+    dragState.origY = rect.top;
+    dragState.li.style.width = rect.width + 'px';
+    dragState.li.style.position = 'fixed';
+    dragState.li.style.zIndex = 1000;
+    dragState.li.style.pointerEvents = 'none';
+    dragState.li.classList.add('dragging');
+  }
+
+  dragState.li.style.left = (dragState.origX + dx) + 'px';
+  dragState.li.style.top = (dragState.origY + dy) + 'px';
+
+  clearDragOverHighlight();
+  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.bucket-list');
+  if (target) target.classList.add('drag-over');
+}
+
+function onPointerUp(e) {
+  if (!dragState || dragState.pointerId !== e.pointerId) return;
+  const { todo, li, moved } = dragState;
+  dragState = null;
+  document.body.classList.remove('no-select');
+
+  if (!moved) return;
+
+  clearDragOverHighlight();
+  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.bucket-list');
+
+  li.classList.remove('dragging');
+  li.style.position = '';
+  li.style.left = '';
+  li.style.top = '';
+  li.style.zIndex = '';
+  li.style.pointerEvents = '';
+  li.style.width = '';
+
+  if (target) moveTask(todo.id, target.dataset.bucket);
+}
+
+document.addEventListener('pointermove', onPointerMove);
+document.addEventListener('pointerup', onPointerUp);
+document.addEventListener('pointercancel', onPointerUp);
+
+function renderTask(todo, { draggable = true, showBucket = false } = {}) {
+  const li = document.createElement('li');
+  li.className = 'task' + (todo.done ? ' done' : '');
+  li.dataset.id = todo.id;
+
+  let handle = null;
+  if (draggable) {
+    handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '⠿';
+    handle.setAttribute('aria-hidden', 'true');
+    handle.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      dragState = { pointerId: e.pointerId, todo, li, startX: e.clientX, startY: e.clientY, moved: false };
+      document.body.classList.add('no-select');
+    });
+
+    li.tabIndex = 0;
+    li.setAttribute('aria-label', `${todo.project}: ${todo.title}(矢印キー上下でバケット移動)`);
+    li.addEventListener('keydown', e => {
+      if (e.target !== li) return;
+      const idx = BUCKETS.indexOf(todo.bucket);
+      if (e.key === 'ArrowUp' && idx > 0) { e.preventDefault(); pendingFocusId = todo.id; moveTask(todo.id, BUCKETS[idx - 1]); }
+      if (e.key === 'ArrowDown' && idx < BUCKETS.length - 1) { e.preventDefault(); pendingFocusId = todo.id; moveTask(todo.id, BUCKETS[idx + 1]); }
+    });
+  }
+
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = todo.done;
+  check.addEventListener('change', () => {
+    todo.done = check.checked;
+    save();
+    render();
+  });
+  const checkHit = document.createElement('label');
+  checkHit.className = 'check-hit';
+  checkHit.addEventListener('pointerdown', e => e.stopPropagation());
+  checkHit.appendChild(check);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  const proj = document.createElement('span');
+  proj.className = 'proj';
+  proj.textContent = todo.project;
+  proj.title = todo.project;
+  proj.style.background = getProjectColor(todo.project);
+  label.append(proj);
+
+  const titleText = document.createElement('span');
+  titleText.className = 'title-text';
+  titleText.textContent = todo.title;
+  titleText.title = todo.title;
+  label.appendChild(titleText);
+
+  function startEditTitle() {
+    const editInput = document.createElement('input');
+    editInput.className = 'title-edit';
+    editInput.value = todo.title;
+    editInput.autocomplete = 'off';
+
+    editInput.addEventListener('pointerdown', e => e.stopPropagation());
+    editInput.addEventListener('click', e => e.stopPropagation());
+
+    let committed = false;
+    editInput.addEventListener('blur', () => {
+      if (committed) return;
+      committed = true;
+      const newTitle = editInput.value.trim();
+      if (newTitle && newTitle !== todo.title) {
+        todo.title = newTitle;
+        save();
+      }
+      render();
+    });
+    editInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); editInput.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); editInput.value = todo.title; editInput.blur(); }
+    });
+
+    titleText.replaceWith(editInput);
+    editInput.focus();
+    editInput.select();
+  }
+
+  titleText.tabIndex = 0;
+  titleText.setAttribute('role', 'button');
+  titleText.setAttribute('aria-label', 'タイトルを編集');
+  titleText.addEventListener('pointerdown', e => e.stopPropagation());
+  titleText.addEventListener('click', e => { e.stopPropagation(); startEditTitle(); });
+  titleText.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEditTitle(); }
+  });
+
+  const del = document.createElement('button');
+  del.className = 'del';
+  del.textContent = '✕';
+  del.title = '削除';
+  del.setAttribute('aria-label', '削除');
+  del.addEventListener('click', () => {
+    if (del.dataset.confirm) {
+      todos = todos.filter(t => t.id !== todo.id);
+      save();
+      render();
+    } else {
+      del.dataset.confirm = '1';
+      del.classList.add('confirm');
+      del.textContent = '本当に削除？';
+      setTimeout(() => {
+        delete del.dataset.confirm;
+        del.classList.remove('confirm');
+        del.textContent = '✕';
+      }, 3000);
+    }
+  });
+
+  const parts = [handle, checkHit, label].filter(Boolean);
+  if (showBucket) {
+    const bucketTag = document.createElement('span');
+    bucketTag.className = 'bucket-tag';
+    bucketTag.textContent = BUCKET_LABELS[todo.bucket] ?? todo.bucket;
+    parts.push(bucketTag);
+  }
+  parts.push(del);
+  li.append(...parts);
+  return li;
+}
+
+function createProjectInline(name, select) {
+  name = name.trim();
+  if (!name) return false;
+  if (!projects.includes(name)) {
+    projects.push(name);
+    save();
+    renderFilters();
+  }
+  populateProjectOptions(select, name);
+  return true;
+}
+
+function submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject) {
+  const title = input.value.trim();
+  if (!title) { input.focus(); return; }
+
+  if (!newProjectInput.hidden && newProjectInput.value.trim()) {
+    confirmNewProject();
+    return;
+  }
+
+  if (!projects.length || select.value === NEW_PROJECT) {
+    newProjectInput.hidden = false;
+    flashInvalid(newProjectInput);
+    newProjectInput.focus();
+    return;
+  }
+
+  todos.push({ id: uuid(), title, project: select.value, bucket, done: false });
+  quickAddBucket = null;
+  save();
+  render();
+}
+
+function renderQuickAddRow(bucket) {
+  const row = document.createElement('div');
+  row.className = 'quick-add-row';
+
+  const input = document.createElement('input');
+  input.placeholder = 'やることを入力';
+  input.autocomplete = 'off';
+
+  const select = document.createElement('select');
+  populateProjectOptions(select, projects[0]);
+
+  const newProjectInput = document.createElement('input');
+  newProjectInput.className = 'new-project-input';
+  newProjectInput.placeholder = 'プロジェクト名';
+  newProjectInput.autocomplete = 'off';
+  newProjectInput.hidden = projects.length > 0;
+
+  select.addEventListener('change', () => {
+    if (select.value === NEW_PROJECT) {
+      newProjectInput.hidden = false;
+      newProjectInput.focus();
+    } else {
+      newProjectInput.hidden = true;
+    }
+  });
+
+  function confirmNewProject() {
+    if (createProjectInline(newProjectInput.value, select)) {
+      newProjectInput.value = '';
+      newProjectInput.hidden = true;
+      if (input.value.trim()) {
+        submitQuickAdd(bucket, input, select, newProjectInput);
+      } else {
+        input.focus();
+      }
+    } else {
+      newProjectInput.focus();
+    }
+  }
+
+  newProjectInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmNewProject(); }
+    if (e.key === 'Escape') { e.preventDefault(); quickAddBucket = null; renderBoard(); }
+  });
+  newProjectInput.addEventListener('blur', () => {
+    if (newProjectInput.value.trim()) confirmNewProject();
+  });
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'quick-add-confirm';
+  confirmBtn.textContent = '追加';
+  confirmBtn.addEventListener('click', () => submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject));
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'quick-add-cancel';
+  cancelBtn.textContent = 'キャンセル';
+  cancelBtn.addEventListener('click', () => { quickAddBucket = null; renderBoard(); });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitQuickAdd(bucket, input, select, newProjectInput, confirmNewProject); }
+    if (e.key === 'Escape') { quickAddBucket = null; renderBoard(); }
+  });
+
+  row.append(input, select, newProjectInput, confirmBtn, cancelBtn);
+  return row;
+}
+
+function renderQuickAddButton(bucket) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'quick-add-btn';
+  btn.textContent = '+ 新規追加';
+  btn.addEventListener('click', () => { quickAddBucket = bucket; renderBoard(); });
+  return btn;
+}
+
+function renderCompletedBoard() {
+  const doneTasks = todos.filter(t => t.done);
+
+  const section = document.createElement('section');
+  section.className = 'bucket';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = `＜${COMPLETED}＞`;
+  section.appendChild(h2);
+
+  const ul = document.createElement('ul');
+  ul.className = 'bucket-list';
+
+  if (!doneTasks.length) {
+    const empty = document.createElement('li');
+    empty.className = 'bucket-empty';
+    empty.textContent = '完了済みのタスクはありません';
+    ul.appendChild(empty);
+  } else {
+    doneTasks.forEach(todo => ul.appendChild(renderTask(todo, { draggable: false, showBucket: true })));
+  }
+
+  section.appendChild(ul);
+  $board.replaceChildren(section);
+}
+
+function renderBoard() {
+  if (filter === COMPLETED) {
+    renderCompletedBoard();
+    return;
+  }
+
+  const base = filter === 'すべて' ? todos : todos.filter(t => t.project === filter);
+  const filtered = base.filter(t => !t.done);
+
+  $board.replaceChildren(...BUCKETS.map(bucket => {
+    const section = document.createElement('section');
+    section.className = 'bucket';
+
+    const h2 = document.createElement('h2');
+    h2.textContent = `＜${BUCKET_LABELS[bucket] ?? bucket}＞`;
+    section.appendChild(h2);
+
+    const ul = document.createElement('ul');
+    ul.className = 'bucket-list';
+    ul.dataset.bucket = bucket;
+
+    const items = filtered.filter(t => t.bucket === bucket);
+    if (!items.length) {
+      if (filter === 'すべて') {
+        const empty = document.createElement('li');
+        empty.className = 'bucket-empty';
+        empty.textContent = 'タスクなし';
+        ul.appendChild(empty);
+      }
+    } else {
+      items.forEach(todo => ul.appendChild(renderTask(todo)));
+    }
+
+    section.appendChild(ul);
+    section.appendChild(
+      quickAddBucket === bucket ? renderQuickAddRow(bucket) : renderQuickAddButton(bucket)
+    );
+    return section;
+  }));
+
+  $board.querySelector('.quick-add-row input')?.focus();
+
+  if (pendingFocusId) {
+    $board.querySelector(`[data-id="${pendingFocusId}"]`)?.focus();
+    pendingFocusId = null;
+  }
+}
+
+function render() {
+  if (filter !== 'すべて' && filter !== COMPLETED && (!projects.includes(filter) || hiddenProjects.includes(filter))) filter = 'すべて';
+  renderFilters();
+  renderBoard();
+}
+
+render();
+</script>
+</body>
+</html>
