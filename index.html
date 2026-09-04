@@ -174,6 +174,10 @@
     background: var(--accent-soft);
     box-shadow: inset 0 0 0 1px var(--accent-border);
   }
+  .drop-marker {
+    height: 3px; margin: 2px 0; border-radius: 2px;
+    background: var(--accent); list-style: none; pointer-events: none;
+  }
   .bucket-empty {
     color: #a8a09a; font-size: 12px; padding: 6px 4px;
   }
@@ -286,6 +290,9 @@
     font-size: 10px; padding: 3px 8px; border-radius: 999px;
     background: var(--field); color: var(--muted); flex-shrink: 0;
     border: 1px solid var(--line);
+  }
+  .completed-date {
+    font-size: 10px; color: var(--muted); flex-shrink: 0;
   }
 
   @media (min-width: 960px) {
@@ -796,18 +803,74 @@ function renderAddBucketCard() {
   return section;
 }
 
-function moveTask(id, bucket) {
-  const todo = todos.find(t => t.id === id);
-  if (!todo || todo.bucket === bucket) return;
+function moveTask(id, bucket, beforeId) {
+  const idx = todos.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const todo = todos[idx];
+  if (todo.bucket === bucket && !beforeId) return;
+  todos.splice(idx, 1);
   todo.bucket = bucket;
+  if (beforeId) {
+    const insertIdx = todos.findIndex(t => t.id === beforeId);
+    todos.splice(insertIdx === -1 ? todos.length : insertIdx, 0, todo);
+  } else {
+    todos.push(todo);
+  }
   save();
   render();
 }
 
 const DRAG_THRESHOLD = 6;
+const SCROLL_EDGE = 60;
+const SCROLL_MAX_SPEED = 16;
+let autoScrollRAF = null;
 
 function clearDragOverHighlight() {
   document.querySelectorAll('.bucket-list.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragState?.marker?.remove();
+}
+
+function updateDragOverHighlight(clientX, clientY) {
+  if (!dragState) return;
+  clearDragOverHighlight();
+  const target = document.elementFromPoint(clientX, clientY)?.closest('.bucket-list');
+  if (!target) { dragState.dropBucket = null; dragState.dropBeforeId = null; return; }
+
+  target.classList.add('drag-over');
+  const siblings = [...target.querySelectorAll(':scope > .task')].filter(t => t !== dragState.li);
+  let beforeEl = null;
+  for (const sib of siblings) {
+    const rect = sib.getBoundingClientRect();
+    if (clientY < rect.top + rect.height / 2) { beforeEl = sib; break; }
+  }
+  if (beforeEl) target.insertBefore(dragState.marker, beforeEl);
+  else target.appendChild(dragState.marker);
+
+  dragState.dropBucket = target.dataset.bucket;
+  dragState.dropBeforeId = beforeEl?.dataset.id ?? null;
+}
+
+function stopAutoScroll() {
+  if (autoScrollRAF) { cancelAnimationFrame(autoScrollRAF); autoScrollRAF = null; }
+}
+
+function updateAutoScroll(clientY) {
+  const vh = window.innerHeight;
+  let speed = 0;
+  if (clientY < SCROLL_EDGE) speed = -SCROLL_MAX_SPEED * (1 - clientY / SCROLL_EDGE);
+  else if (clientY > vh - SCROLL_EDGE) speed = SCROLL_MAX_SPEED * (1 - (vh - clientY) / SCROLL_EDGE);
+
+  dragState.scrollSpeed = speed;
+  if (speed === 0) { stopAutoScroll(); return; }
+  if (autoScrollRAF) return;
+
+  const step = () => {
+    if (!dragState || !dragState.moved || !dragState.scrollSpeed) { stopAutoScroll(); return; }
+    window.scrollBy(0, dragState.scrollSpeed);
+    if (dragState.lastClientX != null) updateDragOverHighlight(dragState.lastClientX, dragState.lastClientY);
+    autoScrollRAF = requestAnimationFrame(step);
+  };
+  autoScrollRAF = requestAnimationFrame(step);
 }
 
 function onPointerMove(e) {
@@ -826,26 +889,28 @@ function onPointerMove(e) {
     dragState.li.style.zIndex = 1000;
     dragState.li.style.pointerEvents = 'none';
     dragState.li.classList.add('dragging');
+    dragState.marker = document.createElement('li');
+    dragState.marker.className = 'drop-marker';
   }
 
   dragState.li.style.left = (dragState.origX + dx) + 'px';
   dragState.li.style.top = (dragState.origY + dy) + 'px';
 
-  clearDragOverHighlight();
-  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.bucket-list');
-  if (target) target.classList.add('drag-over');
+  dragState.lastClientX = e.clientX;
+  dragState.lastClientY = e.clientY;
+  updateDragOverHighlight(e.clientX, e.clientY);
+  updateAutoScroll(e.clientY);
 }
 
 function onPointerUp(e) {
   if (!dragState || dragState.pointerId !== e.pointerId) return;
-  const { todo, li, moved } = dragState;
+  const { todo, li, moved, dropBucket, dropBeforeId } = dragState;
+  stopAutoScroll();
+  clearDragOverHighlight();
   dragState = null;
   document.body.classList.remove('no-select');
 
   if (!moved) return;
-
-  clearDragOverHighlight();
-  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.bucket-list');
 
   li.classList.remove('dragging');
   li.style.position = '';
@@ -855,14 +920,23 @@ function onPointerUp(e) {
   li.style.pointerEvents = '';
   li.style.width = '';
 
-  if (target) moveTask(todo.id, target.dataset.bucket);
+  if (dropBucket) moveTask(todo.id, dropBucket, dropBeforeId);
 }
 
 document.addEventListener('pointermove', onPointerMove);
 document.addEventListener('pointerup', onPointerUp);
 document.addEventListener('pointercancel', onPointerUp);
 
-function renderTask(todo, { draggable = true, showBucket = false } = {}) {
+function formatCompletedDate(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return sameYear
+    ? `${d.getMonth() + 1}/${d.getDate()} 完了`
+    : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} 完了`;
+}
+
+function renderTask(todo, { draggable = true, showBucket = false, showCompletedDate = false } = {}) {
   const li = document.createElement('li');
   li.className = 'task' + (todo.done ? ' done' : '');
   li.dataset.id = todo.id;
@@ -894,6 +968,7 @@ function renderTask(todo, { draggable = true, showBucket = false } = {}) {
   check.checked = todo.done;
   check.addEventListener('change', () => {
     todo.done = check.checked;
+    todo.completedAt = todo.done ? Date.now() : null;
     save();
     render();
   });
@@ -984,6 +1059,12 @@ function renderTask(todo, { draggable = true, showBucket = false } = {}) {
     bucketTag.className = 'bucket-tag';
     bucketTag.textContent = getBucketName(todo.bucket);
     parts.push(bucketTag);
+  }
+  if (showCompletedDate && todo.completedAt) {
+    const completedDate = document.createElement('span');
+    completedDate.className = 'completed-date';
+    completedDate.textContent = formatCompletedDate(todo.completedAt);
+    parts.push(completedDate);
   }
   parts.push(del);
   li.append(...parts);
@@ -1124,7 +1205,7 @@ function renderCompletedBoard() {
     empty.textContent = '完了済みのタスクはありません';
     ul.appendChild(empty);
   } else {
-    doneTasks.forEach(todo => ul.appendChild(renderTask(todo, { draggable: false, showBucket: true })));
+    doneTasks.forEach(todo => ul.appendChild(renderTask(todo, { draggable: false, showBucket: true, showCompletedDate: true })));
   }
 
   section.appendChild(ul);
